@@ -1,0 +1,24 @@
+runs:
+  using: 'composite'
+  steps:
+    - name: Install wrapper over docker
+      shell: bash
+      run: |
+        DOCKER_PATH=$(command -v docker)
+        sudo mv "$DOCKER_PATH" "${DOCKER_PATH}-original"
+        cp "$GITHUB_ACTION_PATH/entrypoint.sh" ./docker-original
+        sudo mv ./docker-original "$DOCKER_PATH"
+        sudo chmod +x "$DOCKER_PATH"
+
+    - name: Install wrapper over docker-buildx
+      shell: bash
+      run: |
+        if command -v docker-buildx &>/dev/null; then
+          BUILDX_PATH=$(command -v docker-buildx)
+          sudo mv "$BUILDX_PATH" "${BUILDX_PATH}-original"
+          cp "$GITHUB_ACTION_PATH/entrypoint.sh" ./docker-buildx-original
+          sudo mv ./docker-buildx-original "$BUILDX_PATH"
+          sudo chmod +x "$BUILDX_PATH"
+        else
+          echo "[container] docker-buildx not found — skipping wrapper install"
+        fi
