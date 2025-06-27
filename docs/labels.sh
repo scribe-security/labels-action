@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-install_wrapper() {
+install_wrapper(){
   BIN="$1"
   REAL="$(command -v "$BIN" || true)"
-  if [[ -z "$REAL" ]]; then
-    echo "[labels] $BIN not found, skipping" >&2
-    return
-  fi
+  [[ -z "$REAL" ]] && { echo "[labels] $BIN not found, skipping" >&2; return; }
   REAL_ORIG="${REAL}-original"
   if [[ ! -x "$REAL_ORIG" ]]; then
     echo "[labels] backing up $REAL → $REAL_ORIG" >&2
