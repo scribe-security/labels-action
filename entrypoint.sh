@@ -12,7 +12,8 @@ fi
 
 # Only wrap docker build/buildx invocation
 if [[ "$CMD_NAME" == "docker-buildx" ]] || \
-   ([[ "$CMD_NAME" == "docker" ]] && [[ "$1" == "build" ]]); then
+   ( [[ "$CMD_NAME" == "docker" ]] && \
+     ( [[ "$1" == "build" ]] || ( [[ "$1" == "buildx" ]] && [[ "$2" == "build" ]] ) ) ); then
 
   # Collect all GITHUB_* env vars into --label args
   LABEL_ARGS=()
