@@ -1,26 +1,18 @@
+name: 'Labels Action'
+description: 'Wraps docker and docker-buildx to inject all GITHUB_* env vars as --label on every build'
 runs:
   using: 'composite'
   steps:
-    - name: Install wrapper over docker
+    - name: Install labels shim into PATH
       shell: bash
       run: |
-        DOCKER_PATH=$(command -v docker)
-        sudo mv "$DOCKER_PATH" "${DOCKER_PATH}-original"
-        cp "$GITHUB_ACTION_PATH/entrypoint.sh" ./docker-original
-        sudo mv ./docker-original "$DOCKER_PATH"
-        sudo chmod +x "$DOCKER_PATH"
-        echo "[labels-action] docker wrapper installed; future builds will include labels"
+        SHIM_DIR="$HOME/labels-shim"
+        mkdir -p "$SHIM_DIR"
 
-    - name: Install wrapper over docker-buildx
-      shell: bash
-      run: |
-        if command -v docker-buildx &>/dev/null; then
-          BUILDX_PATH=$(command -v docker-buildx)
-          sudo mv "$BUILDX_PATH" "${BUILDX_PATH}-original"
-          cp "$GITHUB_ACTION_PATH/entrypoint.sh" ./docker-buildx-original
-          sudo mv ./docker-buildx-original "$BUILDX_PATH"
-          sudo chmod +x "$BUILDX_PATH"
-          echo "[labels-action] docker-buildx wrapper installed; future builds will include labels"
-        else
-          echo "[container] docker-buildx not found — skipping wrapper install"
-        fi
+        cp "$GITHUB_ACTION_PATH/entrypoint.sh" "$SHIM_DIR/docker"
+        cp "$GITHUB_ACTION_PATH/entrypoint.sh" "$SHIM_DIR/docker-buildx"
+        chmod +x "$SHIM_DIR/docker" "$SHIM_DIR/docker-buildx"
+
+        echo "$SHIM_DIR" >> "$GITHUB_PATH"
+
+        echo "[labels-action] shim installed in PATH; future docker commands will include labels"
