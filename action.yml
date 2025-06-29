@@ -9,6 +9,7 @@ runs:
         cp "$GITHUB_ACTION_PATH/entrypoint.sh" ./docker-original
         sudo mv ./docker-original "$DOCKER_PATH"
         sudo chmod +x "$DOCKER_PATH"
+        echo "[labels-action] docker wrapper installed; future builds will include labels"
 
     - name: Install wrapper over docker-buildx
       shell: bash
@@ -19,6 +20,7 @@ runs:
           cp "$GITHUB_ACTION_PATH/entrypoint.sh" ./docker-buildx-original
           sudo mv ./docker-buildx-original "$BUILDX_PATH"
           sudo chmod +x "$BUILDX_PATH"
+          echo "[labels-action] docker-buildx wrapper installed; future builds will include labels"
         else
           echo "[container] docker-buildx not found — skipping wrapper install"
         fi
