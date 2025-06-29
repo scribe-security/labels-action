@@ -47,5 +47,4 @@ The installer downloads the label-injecting entrypoint, sets up `docker` and `do
 ---
 
 
----
 
