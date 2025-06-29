@@ -1,28 +1,35 @@
- name: 'Labels Action'
- description: >-
-   Wraps docker and docker-buildx to inject all GITHUB_* env vars
-   as --label on every build by installing a shim in PATH.
+name: 'Labels Action'
+description: >-
+  Wraps `docker` and `docker buildx` to inject all `GITHUB_*` env vars as
+  `--label` on every build by installing a shim in your `$PATH`.
 
- runs:
-   using: 'composite'
-   steps:
-     - name: Install labels shim into PATH
-       shell: bash
-       run: |
-         SHIM_DIR="$HOME/labels-shim"
-         mkdir -p "$SHIM_DIR"
+runs:
+  using: 'composite'
+  steps:
+    - name: Install labels shim into PATH
+      shell: bash
+      run: |
+ 
+        SHIM_DIR="$HOME/labels-shim"
+        mkdir -p "$SHIM_DIR"
 
-         REAL_DOCKER="$(command -v docker)"
-         cp "$REAL_DOCKER" "$SHIM_DIR/docker-original"
-         if command -v docker-buildx &>/dev/null; then
-           REAL_BUILDX="$(command -v docker-buildx)"
-           cp "$REAL_BUILDX" "$SHIM_DIR/docker-buildx-original"
-         fi
+        REAL_DOCKER="$(command -v docker)"
+        cp "$REAL_DOCKER" "$SHIM_DIR/docker-original"
+        if command -v docker-buildx &>/dev/null; then
+          REAL_BUILDX="$(command -v docker-buildx)"
+          cp "$REAL_BUILDX" "$SHIM_DIR/docker-buildx-original"
+        fi
 
-         cp "$GITHUB_ACTION_PATH/entrypoint.sh" "$SHIM_DIR/docker"
-         cp "$GITHUB_ACTION_PATH/entrypoint.sh" "$SHIM_DIR/docker-buildx"
-         chmod +x "$SHIM_DIR/docker" "$SHIM_DIR/docker-buildx"
+     
+        cp "$GITHUB_ACTION_PATH/entrypoint.sh" "$SHIM_DIR/docker"
+        cp "$GITHUB_ACTION_PATH/entrypoint.sh" "$SHIM_DIR/docker-buildx"
+        chmod +x \
+          "$SHIM_DIR/docker" \
+          "$SHIM_DIR/docker-original" \
+          "$SHIM_DIR/docker-buildx" \
+          "$SHIM_DIR/docker-buildx-original"
 
-         echo "$SHIM_DIR" >> "$GITHUB_PATH"
+     
+        echo "$SHIM_DIR" >> "$GITHUB_PATH"
 
-         echo "[labels-action] shim installed in PATH; future docker commands will include labels"
+        echo "[labels-action] shim installed in PATH; future docker commands will include labels"
