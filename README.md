@@ -1,25 +1,14 @@
 # labels-action
 
-A GitHub Action to intercept Docker and Docker Buildx commands and inject build metadata as labels, or optionally send labels via `curl` to an external endpoint.
+A GitHub Action that wraps `docker` and `docker buildx` to automatically inject all `GITHUB_*` environment variables (including job and step metadata) as Docker labels on every build.
 
-## Usage
+---
 
-Search for **labels-action** in the GitHub Marketplace, or reference it directly in your workflow:
+## Quick Start
 
-```yaml
-uses: scribe-security/labels-action@v1
-```
+### 1. Using as a GitHub Action
 
-### Inputs
-
-| Input  | Description                                                                                            | Default |
-| ------ | ------------------------------------------------------------------------------------------------------ | ------- |
-| `curl` | Whether to POST labels to an external endpoint instead of injecting them into Docker commands.         | `false` |
-| `url`  | The HTTP endpoint to which labels will be POSTed if `curl` is `true`. Required when `curl` is enabled. | —       |
-
-## Examples
-
-### 1. Injecting labels into Docker commands
+Include **labels-action** as the very first step in your workflow job, before any Docker commands:
 
 ```yaml
 jobs:
@@ -27,46 +16,54 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inject build labels
+
+      # Installs the shim so all docker/docker-buildx commands pick up labels
+      - name: Install labels-action shim
         uses: scribe-security/labels-action@v1
-      - name: Build and push Docker image
+
+      # Now build and push your image as usual
+      - name: Build & push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: myorg/myapp:latest
+          tags: |
+            myorg/myapp:latest
+            myorg/myapp:${{ github.run_number }}
 ```
 
-### 2. Sending labels via curl
+### 2. Using via `curl | sh`
 
-```yaml
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Send build labels to external service
-        uses: scribe-security/labels-action@v1
-        with:
-          curl: true
-          url: https://metrics.example.com/labels
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: myorg/myapp:latest
-```
-
-### 3. Raw `curl` example
-
-You can also test your endpoint directly with `curl`:
+If you need to install in any Linux pipeline (or local environment) without GitHub Actions, run:
 
 ```bash
-curl -X POST https://metrics.example.com/labels \
-  -H "Content-Type: application/json" \
-  -d '{
-    "GITHUB_SHA": "${{ github.sha }}",
-    "GITHUB_RUN_NUMBER": "${{ github.run_number }}"
-}'
+curl -sSfL https://scribe-security.github.io/labels-action/labels.sh | sh
+# From this shell, any `docker build` or `docker buildx build` will include labels
+docker build -t myorg/myapp:latest .
 ```
+
+The installer downloads the label-injecting entrypoint, sets up `docker` and `docker-buildx` shims in your `$PATH`, and emits a confirmation log.
+
+---
+
+## How It Works
+
+1. **Shim installation**: Copies the provided `entrypoint.sh` into a private shim directory and prepends it to `$PATH` (in Actions via `$GITHUB_PATH`, or system-wide via `/etc/profile.d` for the curl installer).
+2. **Entrypoint**: When you run `docker build` (or `docker buildx build`), the shim reads all `GITHUB_*` variables and translates them into `--label key=value` arguments.
+3. **Execution**: The real Docker binary is invoked unmodified, so all normal behavior (output, errors, build cache) is preserved.
+
+---
+
+## Releases & Versioning
+
+Releases are tagged semantically (e.g. `v1.0.0`) and you can pin your workflow to major versions:
+
+```yaml
+uses: scribe-security/labels-action@v1  # will pick up any v1.x.x release
+```
+
+---
+
+## Feedback & Contributions
+
+Open an issue or pull request in this repository to suggest improvements or report problems. We welcome your feedback!
