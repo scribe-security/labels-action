@@ -46,24 +46,6 @@ The installer downloads the label-injecting entrypoint, sets up `docker` and `do
 
 ---
 
-## How It Works
-
-1. **Shim installation**: Copies the provided `entrypoint.sh` into a private shim directory and prepends it to `$PATH` (in Actions via `$GITHUB_PATH`, or system-wide via `/etc/profile.d` for the curl installer).
-2. **Entrypoint**: When you run `docker build` (or `docker buildx build`), the shim reads all `GITHUB_*` variables and translates them into `--label key=value` arguments.
-3. **Execution**: The real Docker binary is invoked unmodified, so all normal behavior (output, errors, build cache) is preserved.
 
 ---
 
-## Releases & Versioning
-
-Releases are tagged semantically (e.g. `v1.0.0`) and you can pin your workflow to major versions:
-
-```yaml
-uses: scribe-security/labels-action@v1  # will pick up any v1.x.x release
-```
-
----
-
-## Feedback & Contributions
-
-Open an issue or pull request in this repository to suggest improvements or report problems. We welcome your feedback!
