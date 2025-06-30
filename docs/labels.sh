@@ -1,62 +1,44 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-# 1) Create the global shim directory
-SHIM_DIR="/usr/local/labels-shim"
-sudo mkdir -p "$SHIM_DIR"
-
-# 2) Backup the real docker and docker-buildx binaries
-sudo cp "$(command -v docker)" "$SHIM_DIR/docker-original"
-sudo chmod +x "$SHIM_DIR/docker-original"
-if command -v docker-buildx &>/dev/null; then
-  sudo cp "$(command -v docker-buildx)" "$SHIM_DIR/docker-buildx-original"
-  sudo chmod +x "$SHIM_DIR/docker-buildx-original"
+if [ $# -lt 1 ]; then
+  echo "[labels-action] ERROR: missing shim name argument" >&2
+  exit 1
 fi
 
-# 3) Download the entrypoint injector into the shim
-sudo curl -sSfL \
-  "https://raw.githubusercontent.com/scribe-security/labels-action/main/entrypoint.sh" \
-  -o "$SHIM_DIR/entrypoint.sh"
-sudo chmod +x "$SHIM_DIR/entrypoint.sh"
+# The first argument is the shim name: "docker" or "docker-buildx"
+CMD_NAME="$1"
+shift
 
-# 4) Create wrapper scripts for docker and (standalone) docker-buildx
-sudo tee "$SHIM_DIR/docker" >/dev/null <<EOF
-#!/usr/bin/env bash
-exec "$SHIM_DIR/entrypoint.sh" docker "\$@"
-EOF
-
-sudo tee "$SHIM_DIR/docker-buildx" >/dev/null <<EOF
-#!/usr/bin/env bash
-exec "$SHIM_DIR/entrypoint.sh" docker-buildx "\$@"
-EOF
-
-sudo chmod +x "$SHIM_DIR/docker" "$SHIM_DIR/docker-buildx"
-
-# 5) Hijack the Docker CLI plugin for buildx
-PLUGIN_DIR="/usr/libexec/docker/cli-plugins"
-if [ -d "$PLUGIN_DIR" ]; then
-  # backup the real plugin
-  if [ -x "$PLUGIN_DIR/docker-buildx" ]; then
-    sudo cp "$PLUGIN_DIR/docker-buildx" "$SHIM_DIR/docker-buildx-plugin-original"
-  fi
-
-  # overwrite it with our shim
-  sudo tee "$PLUGIN_DIR/docker-buildx" >/dev/null <<EOF
-#!/usr/bin/env bash
-exec "$SHIM_DIR/entrypoint.sh" docker-buildx "\$@"
-EOF
-
-  sudo chmod +x "$PLUGIN_DIR/docker-buildx"
+# Find the real binary (docker-original or docker-buildx-original)
+REAL_BIN="$(command -v "${CMD_NAME}-original" || true)"
+if [[ ! -x "$REAL_BIN" ]]; then
+  echo "[labels-action] ERROR: real '$CMD_NAME' binary not found at '${CMD_NAME}-original'" >&2
+  exit 1
 fi
 
-# 6) Prepend shim to system-wide PATH via /etc/profile.d
-sudo mkdir -p /etc/profile.d
-echo "export PATH=\"$SHIM_DIR:\$PATH\"" | sudo tee /etc/profile.d/labels-shim.sh
+# Decide whether to inject on build/buildx build
+INJECT=false
+if [[ "$CMD_NAME" == "docker-buildx" ]]; then
+  [[ "${1:-}" == "build" ]] && INJECT=true
+elif [[ "$CMD_NAME" == "docker" ]]; then
+  case "$1" in
+    build) INJECT=true ;;
+    buildx)
+      [[ "${2:-}" == "build" ]] && INJECT=true
+      ;;
+  esac
+fi
 
-echo "[labels] shim installed in PATH; future docker commands will include labels"
+if $INJECT; then
+  # Collect all GITHUB_* vars into --label args
+  LABEL_ARGS=()
+  while IFS='=' read -r NAME VALUE; do
+    [[ "$NAME" =~ ^GITHUB_ ]] && LABEL_ARGS+=(--label "${NAME}=${VALUE}")
+  done < <(printenv)
 
-# 7) If running in GitHub Actions, register our shim so remaining steps pick it up
-if [[ -n "${GITHUB_PATH-}" ]]; then
-  echo "$SHIM_DIR" >> "$GITHUB_PATH"
-  echo "[labels] registered $SHIM_DIR in GITHUB_PATH for subsequent steps"
+  echo "[labels-action] injecting labels: ${LABEL_ARGS[*]}" >&2
+  exec "$REAL_BIN" "$@" "${LABEL_ARGS[@]}"
+else
+  exec "$REAL_BIN" "$@"
 fi
