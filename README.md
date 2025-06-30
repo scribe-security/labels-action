@@ -35,7 +35,7 @@ Any manual --label flags are preserved alongside the injected ones.
 
 ## Troubleshooting
 
-- No labels
+### No labels
 
 Check that which docker points under $HOME/labels-shim
 
@@ -44,7 +44,7 @@ Confirm the shim log:
 ```bash
 [labels-action] shim installed; docker build/buildx will now include labels
 ```
-- Binary not found
+### Binary not found
   
 Ensure you install the shim after any login steps so docker is on your $PATH.
 
