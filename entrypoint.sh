@@ -1,29 +1,38 @@
 #!/usr/bin/env bash
-
 set -eo pipefail
 
-CMD_NAME=$(basename "$0")                      
-REAL_PATH="$(command -v "$CMD_NAME")-original" 
+# figure out which shim we were invoked as
+CMD=$(basename "$0")
+REAL_BIN="${CMD}-original"
+REAL_PATH="$(command -v "$REAL_BIN" || true)"
 
 if [[ ! -x "$REAL_PATH" ]]; then
-  echo "[entrypoint] ERROR: real $CMD_NAME not found at $REAL_PATH" >&2
+  echo "[labels-action] ERROR: cannot find real '$REAL_BIN' binary" >&2
   exit 1
 fi
 
-# Only wrap docker build/buildx invocation
-if [[ "$CMD_NAME" == "docker-buildx" ]] || \
-   ( [[ "$CMD_NAME" == "docker" ]] && \
-     ( [[ "$1" == "build" ]] || ( [[ "$1" == "buildx" ]] && [[ "$2" == "build" ]] ) ) ); then
+# decide whether this invocation is a build
+INJECT=false
+if [[ "$CMD" == "docker-buildx" && "$1" == "build" ]]; then
+  INJECT=true
+elif [[ "$CMD" == "docker" ]]; then
+  case "$1" in
+    build) INJECT=true ;;
+    buildx)
+      [[ "${2:-}" == "build" ]] && INJECT=true
+      ;;
+  esac
+fi
 
-  # Collect all GITHUB_* env vars into --label args
+if $INJECT; then
+  # collect all GITHUB_* vars into --label args
   LABEL_ARGS=()
-  while IFS='=' read -r var val; do
-    [[ "$var" =~ ^GITHUB_ ]] && LABEL_ARGS+=(--label "${var}=${val}")
+  while IFS='=' read -r NAME VALUE; do
+    [[ "$NAME" =~ ^GITHUB_ ]] && LABEL_ARGS+=(--label "${NAME}=${VALUE}")
   done < <(printenv)
 
-  echo "[entrypoint] injecting labels: ${LABEL_ARGS[*]}" >&2
+  echo "[labels-action] injecting labels: ${LABEL_ARGS[*]}" >&2
   exec "$REAL_PATH" "$@" "${LABEL_ARGS[@]}"
 else
-  # Pass through all other commands unmodified
   exec "$REAL_PATH" "$@"
 fi
