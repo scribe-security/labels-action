@@ -1,4 +1,4 @@
-# Labels Action
+# labels-action
 
 Wraps `docker build…` and `docker buildx build…` so that **all** `GITHUB_*` env vars
 are automatically injected as `--label` flags on every build.
