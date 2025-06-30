@@ -1,44 +1,67 @@
 #!/usr/bin/env bash
-set -eo pipefail
+set -euo pipefail
 
-if [ $# -lt 1 ]; then
-  echo "[labels-action] ERROR: missing shim name argument" >&2
-  exit 1
-fi
+SHIM_DIR="/usr/local/labels-shim"
 
-# The first argument is the shim name: "docker" or "docker-buildx"
-CMD_NAME="$1"
-shift
+# 1) Create the shim dir
+sudo mkdir -p "$SHIM_DIR"
 
-# Find the real binary (docker-original or docker-buildx-original)
-REAL_BIN="$(command -v "${CMD_NAME}-original" || true)"
-if [[ ! -x "$REAL_BIN" ]]; then
-  echo "[labels-action] ERROR: real '$CMD_NAME' binary not found at '${CMD_NAME}-original'" >&2
-  exit 1
-fi
+# 2) Back up the real `docker` binary
+REAL_DOCKER="$(command -v docker)"
+sudo cp "$REAL_DOCKER" "$SHIM_DIR/docker-original"
+sudo chmod +x "$SHIM_DIR/docker-original"
 
-# Decide whether to inject on build/buildx build
-INJECT=false
-if [[ "$CMD_NAME" == "docker-buildx" ]]; then
-  [[ "${1:-}" == "build" ]] && INJECT=true
-elif [[ "$CMD_NAME" == "docker" ]]; then
-  case "$1" in
-    build) INJECT=true ;;
-    buildx)
-      [[ "${2:-}" == "build" ]] && INJECT=true
-      ;;
-  esac
-fi
+# 3) Write our one-and-only `docker` wrapper
+sudo tee "$SHIM_DIR/docker" >/dev/null <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
 
-if $INJECT; then
-  # Collect all GITHUB_* vars into --label args
-  LABEL_ARGS=()
-  while IFS='=' read -r NAME VALUE; do
-    [[ "$NAME" =~ ^GITHUB_ ]] && LABEL_ARGS+=(--label "${NAME}=${VALUE}")
+CMD=\$1; shift
+
+# Build up --label arguments from every GITHUB_* env var
+collect_labels() {
+  local LABELS=()
+  while IFS='=' read -r NAME VAL; do
+    [[ "\$NAME" == GITHUB_* ]] && LABELS+=(--label "\$NAME=\$VAL")
   done < <(printenv)
+  echo "\${LABELS[@]}"
+}
 
-  echo "[labels-action] injecting labels: ${LABEL_ARGS[*]}" >&2
-  exec "$REAL_BIN" "$@" "${LABEL_ARGS[@]}"
+case "\$CMD" in
+  # docker build …
+  build)
+    LABEL_ARGS=(\$(collect_labels))
+    exec "$SHIM_DIR/docker-original" build "\$@" "\${LABEL_ARGS[@]}"
+    ;;
+
+  # docker buildx build …
+  buildx)
+    SUB=\$1; shift
+    if [[ "\$SUB" == "build" ]]; then
+      LABEL_ARGS=(\$(collect_labels))
+      exec "$SHIM_DIR/docker-original" buildx build "\$@" "\${LABEL_ARGS[@]}"
+    else
+      # pass through other buildx subcommands
+      exec "$SHIM_DIR/docker-original" buildx "\$SUB" "\$@"
+    fi
+    ;;
+
+  # everything else (run, pull, push…)
+  *)
+    exec "$SHIM_DIR/docker-original" "\$CMD" "\$@"
+    ;;
+esac
+EOF
+
+sudo chmod +x "$SHIM_DIR/docker"
+
+# 4) Inject our shim into PATH for GitHub Actions
+if [[ -n "${GITHUB_PATH-}" ]]; then
+  # For CI (non-login shells)
+  echo "$SHIM_DIR" >> "$GITHUB_PATH"
 else
-  exec "$REAL_BIN" "$@"
+  # For local installs (login shells)
+  echo "export PATH=\"$SHIM_DIR:\$PATH\"" | sudo tee /etc/profile.d/labels-shim.sh
 fi
+
+echo "[labels] shim installed; docker build/buildx will now include all GITHUB_* labels"
