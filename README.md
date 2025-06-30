@@ -19,7 +19,7 @@ are automatically injected as `--label` flags on every build.
     curl -sSfL https://scribe-security.github.io/labels-action/labels.sh | bash
 ```
 
-### Usage
+## Usage
 
 Immediately after installing the shim:
 
