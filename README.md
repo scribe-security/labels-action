@@ -3,12 +3,6 @@
 Wraps `docker build…` and `docker buildx build…` so that **all** `GITHUB_*` env vars
 are automatically injected as `--label` flags on every build.
 
-## Features
-
-- Zero-config: runs out of the box in any GitHub Actions job  
-- Supports Docker and Buildx  
-- Composite action—no extra containers or dependencies  
-
 ## Installation
 
 ### 1. Via Action
