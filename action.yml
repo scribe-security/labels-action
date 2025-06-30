@@ -1,6 +1,6 @@
 name: 'Labels Action'
 description: >-
-  Wraps `docker` and (if present) `docker-buildx` so that any
+  Wraps `docker` and (if present) `docker buildx` so that any
   `docker build …` or `docker buildx build …` you run in the job
   automatically gets **all** `GITHUB_*` env vars injected as `--label`.
 
@@ -15,22 +15,26 @@ runs:
         SHIM_DIR="$HOME/labels-shim"
         mkdir -p "$SHIM_DIR"
 
+        # copy real docker
         DOCKER_REAL="$(command -v docker)"
         cp "$DOCKER_REAL" "$SHIM_DIR/docker-original"
         chmod +x "$SHIM_DIR/docker-original"
-  
-        cp "$GITHUB_ACTION_PATH/entrypoint.sh" "$SHIM_DIR/docker"
+
+        # copy the wrapper entrypoint from docs/
+        cp "$GITHUB_ACTION_PATH/docs/entrypoint.sh" "$SHIM_DIR/docker"
         chmod +x "$SHIM_DIR/docker"
 
+        # if docker-buildx is present, shim it too
         if command -v docker-buildx &>/dev/null; then
           BUILDX_REAL="$(command -v docker-buildx)"
           cp "$BUILDX_REAL" "$SHIM_DIR/docker-buildx-original"
           chmod +x "$SHIM_DIR/docker-buildx-original"
 
-          cp "$GITHUB_ACTION_PATH/entrypoint.sh" "$SHIM_DIR/docker-buildx"
+          cp "$GITHUB_ACTION_PATH/docs/entrypoint.sh" "$SHIM_DIR/docker-buildx"
           chmod +x "$SHIM_DIR/docker-buildx"
         fi
 
+        # prepend our shim directory to PATH
         echo "$SHIM_DIR" >> "$GITHUB_PATH"
 
         echo "[labels-action] shim installed; docker build/buildx will now include labels"
