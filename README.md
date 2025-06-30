@@ -9,7 +9,7 @@ are automatically injected as `--label` flags on every build.
 
 ```yaml
 - name: Install labels shim
-  uses: scribe-security/labels-action@v1
+  uses: scribe-security/labels-action@main
 ```
 
 ### 2. Via Curl
