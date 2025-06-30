@@ -15,7 +15,7 @@ fi
 
 # 2) Download the wrapper (entrypoint.sh) once
 curl -sSfL \
-  https://<your-org>.github.io/labels-action/entrypoint.sh \
+  https://scribe-security.github.io/labels-action/entrypoint.sh \
   -o "$SHIM_DIR/entrypoint.sh"
 chmod +x "$SHIM_DIR/entrypoint.sh"
 
