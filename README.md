@@ -33,7 +33,7 @@ Immediately after installing the shim:
 ```
 Any manual --label flags are preserved alongside the injected ones.
 
-### Troubleshooting
+## Troubleshooting
 
 - No labels
 
