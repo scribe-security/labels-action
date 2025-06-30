@@ -7,11 +7,11 @@ automatically gets labeled with all `GITHUB_*` environment variables.
 
 1. **Shim installation**  
    Copies the real `docker` and (if present) `docker-buildx` binaries into `$HOME/labels-shim`,  
-   then writes wrapper scripts named `docker` and `docker-buildx` that:
+   then runs a script that:
 
-   - Detect `build` or `buildx build` invocations  
-   - Collect all `GITHUB_*` variables into `--label NAME=VALUE` flags  
-   - Execute the original binary with your Docker arguments plus the label flags
+   - Detects `build` or `buildx build` invocations  
+   - Collects all `GITHUB_*` variables into `--label NAME=VALUE` flags  
+   - Executes the original binary with your Docker arguments plus the label flags
 
 2. **PATH injection**  
    Prepends `$HOME/labels-shim` to `$PATH` in your job so that any subsequent `docker build…`  
