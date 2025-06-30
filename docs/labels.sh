@@ -8,7 +8,6 @@ sudo mkdir -p "$SHIM_DIR"
 # 2) Backup the real docker and docker-buildx binaries
 sudo cp "$(command -v docker)" "$SHIM_DIR/docker-original"
 sudo chmod +x "$SHIM_DIR/docker-original"
-
 if command -v docker-buildx &>/dev/null; then
   sudo cp "$(command -v docker-buildx)" "$SHIM_DIR/docker-buildx-original"
   sudo chmod +x "$SHIM_DIR/docker-buildx-original"
@@ -21,12 +20,12 @@ sudo curl -sSfL \
 sudo chmod +x "$SHIM_DIR/entrypoint.sh"
 
 # 4) Create wrapper scripts for docker and (standalone) docker-buildx
-sudo tee "$SHIM_DIR/docker" >/dev/null <<'EOF'
+sudo tee "$SHIM_DIR/docker" >/dev/null <<EOF
 #!/usr/bin/env bash
 exec "$SHIM_DIR/entrypoint.sh" docker "\$@"
 EOF
 
-sudo tee "$SHIM_DIR/docker-buildx" >/dev/null <<'EOF'
+sudo tee "$SHIM_DIR/docker-buildx" >/dev/null <<EOF
 #!/usr/bin/env bash
 exec "$SHIM_DIR/entrypoint.sh" docker-buildx "\$@"
 EOF
@@ -42,7 +41,7 @@ if [ -d "$PLUGIN_DIR" ]; then
   fi
 
   # overwrite it with our shim
-  sudo tee "$PLUGIN_DIR/docker-buildx" >/dev/null <<'EOF'
+  sudo tee "$PLUGIN_DIR/docker-buildx" >/dev/null <<EOF
 #!/usr/bin/env bash
 exec "$SHIM_DIR/entrypoint.sh" docker-buildx "\$@"
 EOF
