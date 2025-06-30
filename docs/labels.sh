@@ -37,3 +37,9 @@ sudo mkdir -p /etc/profile.d
 echo "export PATH=\"$SHIM_DIR:\$PATH\"" | sudo tee /etc/profile.d/labels-shim.sh
 
 echo "[labels] shim installed in PATH; future docker commands will include labels"
+
+# 6) If running in GitHub Actions, also register the shim dir for remaining steps
+if [[ -n "${GITHUB_PATH-}" ]]; then
+  echo "$SHIM_DIR" >> "$GITHUB_PATH"
+  echo "[labels] registered $SHIM_DIR in GITHUB_PATH for subsequent steps"
+fi
