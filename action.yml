@@ -1,35 +1,36 @@
 name: 'Labels Action'
 description: >-
-  Wraps `docker` and `docker buildx` to inject all `GITHUB_*` env vars as
-  `--label` on every build by installing a shim in your `$PATH`.
+  Wraps `docker` and (if present) `docker-buildx` so that any
+  `docker build …` or `docker buildx build …` you run in the job
+  automatically gets **all** `GITHUB_*` env vars injected as `--label`.
 
 runs:
-  using: 'composite'
+  using: composite
   steps:
-    - name: Install labels shim into PATH
+    - name: Install labels shim
       shell: bash
       run: |
- 
+        set -eo pipefail
+
         SHIM_DIR="$HOME/labels-shim"
         mkdir -p "$SHIM_DIR"
 
-        REAL_DOCKER="$(command -v docker)"
-        cp "$REAL_DOCKER" "$SHIM_DIR/docker-original"
+        DOCKER_REAL="$(command -v docker)"
+        cp "$DOCKER_REAL" "$SHIM_DIR/docker-original"
+        chmod +x "$SHIM_DIR/docker-original"
+  
+        cp "$GITHUB_ACTION_PATH/entrypoint.sh" "$SHIM_DIR/docker"
+        chmod +x "$SHIM_DIR/docker"
+
         if command -v docker-buildx &>/dev/null; then
-          REAL_BUILDX="$(command -v docker-buildx)"
-          cp "$REAL_BUILDX" "$SHIM_DIR/docker-buildx-original"
+          BUILDX_REAL="$(command -v docker-buildx)"
+          cp "$BUILDX_REAL" "$SHIM_DIR/docker-buildx-original"
+          chmod +x "$SHIM_DIR/docker-buildx-original"
+
+          cp "$GITHUB_ACTION_PATH/entrypoint.sh" "$SHIM_DIR/docker-buildx"
+          chmod +x "$SHIM_DIR/docker-buildx"
         fi
 
-     
-        cp "$GITHUB_ACTION_PATH/entrypoint.sh" "$SHIM_DIR/docker"
-        cp "$GITHUB_ACTION_PATH/entrypoint.sh" "$SHIM_DIR/docker-buildx"
-        chmod +x \
-          "$SHIM_DIR/docker" \
-          "$SHIM_DIR/docker-original" \
-          "$SHIM_DIR/docker-buildx" \
-          "$SHIM_DIR/docker-buildx-original"
-
-     
         echo "$SHIM_DIR" >> "$GITHUB_PATH"
 
-        echo "[labels-action] shim installed in PATH; future docker commands will include labels"
+        echo "[labels-action] shim installed; docker build/buildx will now include labels"
