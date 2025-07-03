@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-# 1. OriginalsShim detection 
+# Original‐shim detection 
 CMD=$(basename "$0")
 REAL_BIN="${CMD}-original"
 REAL_PATH="$(command -v "$REAL_BIN" || true)"
@@ -17,31 +17,33 @@ if [[ "$CMD" == "docker-buildx" && "$1" == "build" ]]; then
   INJECT=true
 elif [[ "$CMD" == "docker" ]]; then
   case "$1" in
-    build) INJECT=true ;;
-    buildx) [[ "${2:-}" == "build" ]] && INJECT=true ;;
+    build)    INJECT=true ;;
+    buildx)   [[ "${2:-}" == "build" ]] && INJECT=true ;;
   esac
 fi
 if ! $INJECT; then
   exec "$REAL_PATH" "$@"
 fi
 
-# Mikey’s context-collector functions
+# Mikey’s context‐collector functions 
+
 autodetect_platform() {
-  if   [[ -n "${GITHUB_RUN_ID:-}"        ]]; then echo "github"
-  elif [[ -n "${CI_JOB_ID:-}"            ]]; then echo "gitlab"
-  elif [[ -n "${BITBUCKET_BUILD_NUMBER}" ]]; then echo "bitbucket"
+  if   [[ -n "${GITHUB_RUN_ID:-}" ]]; then echo "github"
+  elif [[ -n "${CI_JOB_ID:-}"     ]]; then echo "gitlab"
+  elif [[ -n "${BITBUCKET_BUILD_NUMBER:-}" ]]; then echo "bitbucket"
   elif [[ -n "${AZURE_RUN_ID:-}" || -n "${BUILD_BUILDID:-}" ]]; then echo "azure"
-  elif [[ -n "${CIRCLE_BUILD_NUM:-}"     ]]; then echo "circleci"
-  elif [[ -n "${TRAVIS_JOB_ID:-}"        ]]; then echo "travis"
-  elif [[ -n "${BUILD_ID:-}"             ]]; then echo "jenkins"
-  else                                           echo "local"
+  elif [[ -n "${CIRCLE_BUILD_NUM:-}" ]]; then echo "circleci"
+  elif [[ -n "${TRAVIS_JOB_ID:-}" ]]; then echo "travis"
+  elif [[ -n "${BUILD_ID:-}"      ]]; then echo "jenkins"
+  else                                 echo "local"
   fi
 }
 
 normalize_git_url() {
   local url="$1"
-  url="${url##+([[:space:]])}"   # trim left
-  url="${url%%+([[:space:]])}"   # trim right
+  # trim
+  url="${url##+([[:space:]])}"
+  url="${url%%+([[:space:]])}"
   if [[ "$url" =~ ^git@github\.com:(.*)$ ]]; then
     url="https://github.com/${BASH_REMATCH[1]}.git"
   elif [[ "$url" =~ ^git@(.*)$ ]]; then
@@ -99,7 +101,8 @@ collect_pipeline_and_git() {
       local bb_br="${BITBUCKET_BRANCH:-}"
       local bb_tag="${BITBUCKET_TAG:-}"
       local ref=""
-      [[ -n "$bb_tag" ]] && ref="refs/tags/$bb_tag" || [[ -n "$bb_br" ]] && ref="refs/heads/$bb_br"
+      [[ -n "$bb_tag" ]] && ref="refs/tags/$bb_tag" ||
+        [[ -n "$bb_br" ]]  && ref="refs/heads/$bb_br"
       local url="${BITBUCKET_GIT_HTTP_ORIGIN:-}.git"
       url="$(normalize_git_url "$url")"
       echo "git_commit"; echo "${BITBUCKET_COMMIT:-}"
@@ -111,7 +114,7 @@ collect_pipeline_and_git() {
     azure)
       echo "platform"; echo "azure"
       local rid="${AZURE_RUN_ID:-$BUILD_BUILDID}"
-      echo "run_id"; echo "$rid"
+      echo "run_id";   echo "$rid"
       echo "actor";    echo "${BUILD_REQUESTEDFORID:-}"
       echo "workflow"; echo "${SYSTEM_DEFINITIONNAME:-}"
       echo "job_name"; echo "${SYSTEM_JOBNAME:-}"
@@ -192,8 +195,7 @@ collect_pipeline_and_git() {
   esac
 }
 
-# Build JSON context
-
+# Build JSON context (skip any key matching secret patterns)
 platform="$(autodetect_platform)"
 declare -a pairs=()
 while IFS= read -r key && IFS= read -r val; do
@@ -202,34 +204,36 @@ done < <(collect_pipeline_and_git "$platform")
 
 json="{"
 for ((i=0; i<${#pairs[@]}; i+=2)); do
-  k="${pairs[i]}" v="${pairs[i+1]}"
-  [[ -n "$v" ]] || continue
-  # escape any double-quotes in the value
+  k="${pairs[i]}"
+  v="${pairs[i+1]}"
+  # skip empty or secret-pattern keys
+  [[ -z "$v" || "$k" =~ (_TOKEN|_PASSWORD|_SECRET) ]] && continue
+  # escape quotes in v
   v_esc="$(printf '%s' "$v" | sed 's/"/\\"/g')"
   json+="\"$k\":\"$v_esc\","
 done
-json="${json%,}"   # strip trailing comma
+json="${json%,}"
 json+="}"
 
-
-# Pick the one CI-prefix var
+# Pick and screen the CI-prefix var 
 case "$platform" in
-  github)      prefix_var="GITHUB_RUN_ID";        prefix_val="${GITHUB_RUN_ID:-}" ;;
-  gitlab)      prefix_var="CI_JOB_ID";             prefix_val="${CI_JOB_ID:-}" ;;
+  github)      prefix_var="GITHUB_RUN_ID";           prefix_val="${GITHUB_RUN_ID:-}" ;;
+  gitlab)      prefix_var="CI_JOB_ID";                prefix_val="${CI_JOB_ID:-}" ;;
   bitbucket)   prefix_var="BITBUCKET_PIPELINE_UUID"; prefix_val="${BITBUCKET_PIPELINE_UUID:-}" ;;
-  azure)       prefix_var="AZURE_RUN_ID";          prefix_val="${AZURE_RUN_ID:-$BUILD_BUILDID}" ;;
-  circleci)    prefix_var="CIRCLE_WORKFLOW_ID";    prefix_val="${CIRCLE_WORKFLOW_ID:-}" ;;
-  travis)      prefix_var="TRAVIS_JOB_ID";         prefix_val="${TRAVIS_JOB_ID:-}" ;;
-  jenkins)     prefix_var="BUILD_ID";              prefix_val="${BUILD_ID:-}" ;;
-  *)           prefix_var="";                      prefix_val="" ;;
+  azure)       prefix_var="AZURE_RUN_ID";             prefix_val="${AZURE_RUN_ID:-$BUILD_BUILDID}" ;;
+  circleci)    prefix_var="CIRCLE_WORKFLOW_ID";       prefix_val="${CIRCLE_WORKFLOW_ID:-}" ;;
+  travis)      prefix_var="TRAVIS_JOB_ID";            prefix_val="${TRAVIS_JOB_ID:-}" ;;
+  jenkins)     prefix_var="BUILD_ID";                 prefix_val="${BUILD_ID:-}" ;;
+  *)           prefix_var="";                         prefix_val="" ;;
 esac
 
-# Inject labels and hand off to the real binary
-
 LABEL_ARGS=(--label "CONTEXT=$json")
-if [[ -n "$prefix_var" && -n "$prefix_val" ]]; then
+
+# only inject the prefix if it's non-empty and not a secret
+if [[ -n "$prefix_var" && -n "$prefix_val" && ! "$prefix_var" =~ (_TOKEN|_PASSWORD|_SECRET) ]]; then
   LABEL_ARGS+=(--label "$prefix_var=$prefix_val")
 fi
 
+# Hand off to the real Docker binary
 echo "[labels-action] injecting labels: ${LABEL_ARGS[*]}" >&2
 exec "$REAL_PATH" "$@" "${LABEL_ARGS[@]}"
