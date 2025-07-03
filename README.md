@@ -1,7 +1,13 @@
 # labels-action
 
-Wraps `docker build…` and `docker buildx build…` so that **all** `GITHUB_*` env vars
-are automatically injected as `--label` flags on every build.
+Wraps `docker build` and `docker buildx build` to automatically inject two labels on every build:
+
+- CONTEXT: JSON of pipeline & Git metadata (across CI platforms)
+
+- your CI’s run‐ID (e.g. `GITHUB_RUN_ID`)
+
+Env vars containing `_TOKEN`, `_PASSWORD` or` _SECRET` are excluded.
+
 
 ## Installation
 
