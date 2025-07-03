@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-# --------------------------------------------------------------------
-# 1) Shim detection
-# --------------------------------------------------------------------
+# 1. OriginalsShim detection 
 CMD=$(basename "$0")
 REAL_BIN="${CMD}-original"
 REAL_PATH="$(command -v "$REAL_BIN" || true)"
@@ -27,9 +25,7 @@ if ! $INJECT; then
   exec "$REAL_PATH" "$@"
 fi
 
-# --------------------------------------------------------------------
-# 2) Mikey’s context-collector functions
-# --------------------------------------------------------------------
+# Mikey’s context-collector functions
 autodetect_platform() {
   if   [[ -n "${GITHUB_RUN_ID:-}"        ]]; then echo "github"
   elif [[ -n "${CI_JOB_ID:-}"            ]]; then echo "gitlab"
@@ -196,9 +192,8 @@ collect_pipeline_and_git() {
   esac
 }
 
-# --------------------------------------------------------------------
-# 3) Build JSON context
-# --------------------------------------------------------------------
+# Build JSON context
+
 platform="$(autodetect_platform)"
 declare -a pairs=()
 while IFS= read -r key && IFS= read -r val; do
@@ -216,9 +211,8 @@ done
 json="${json%,}"   # strip trailing comma
 json+="}"
 
-# --------------------------------------------------------------------
-# 4) Pick the one CI-prefix var
-# --------------------------------------------------------------------
+
+# Pick the one CI-prefix var
 case "$platform" in
   github)      prefix_var="GITHUB_RUN_ID";        prefix_val="${GITHUB_RUN_ID:-}" ;;
   gitlab)      prefix_var="CI_JOB_ID";             prefix_val="${CI_JOB_ID:-}" ;;
@@ -230,9 +224,8 @@ case "$platform" in
   *)           prefix_var="";                      prefix_val="" ;;
 esac
 
-# --------------------------------------------------------------------
-# 5) Inject labels and hand off to the real binary
-# --------------------------------------------------------------------
+# Inject labels and hand off to the real binary
+
 LABEL_ARGS=(--label "CONTEXT=$json")
 if [[ -n "$prefix_var" && -n "$prefix_val" ]]; then
   LABEL_ARGS+=(--label "$prefix_var=$prefix_val")
