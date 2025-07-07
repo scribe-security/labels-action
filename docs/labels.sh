@@ -32,7 +32,13 @@ fi
 if [[ -n "${GITHUB_PATH:-}" ]]; then
   echo "$SHIM_DIR" >> "$GITHUB_PATH"
 else
-  export PATH="$SHIM_DIR:$PATH"
+  echo "export PATH=\"$SHIM_DIR:\$PATH\"" > "$SHIM_DIR/env.sh"
+  chmod +x "$SHIM_DIR/env.sh"
+
+  # Try to affect current shell if not piped (i.e., bash labels.sh directly)
+  if [[ -n "$BASH_VERSION" && -t 0 ]]; then
+    export PATH="$SHIM_DIR:$PATH"
+  fi
 fi
 
 echo "[labels] shim installed; docker & docker-buildx will now inject labels on build"
