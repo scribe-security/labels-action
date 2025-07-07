@@ -11,19 +11,32 @@ if [[ ! -x "$REAL_PATH" ]]; then
   exit 1
 fi
 
-# Only inject on `docker build` or `docker-buildx build`
 INJECT=false
+
 if [[ "$CMD" == "docker-buildx" && "$1" == "build" ]]; then
   INJECT=true
+
 elif [[ "$CMD" == "docker" ]]; then
   case "$1" in
-    build)    INJECT=true ;;
-    buildx)   [[ "${2:-}" == "build" ]] && INJECT=true ;;
+    build)
+      INJECT=true
+      ;;
+    buildx)
+      [[ "$2" == "build" || "$2" == "b" ]] && INJECT=true
+      ;;
+    builder)
+      [[ "$2" == "build" ]] && INJECT=true
+      ;;
+    image)
+      [[ "$2" == "build" ]] && INJECT=true
+      ;;
   esac
 fi
+
 if ! $INJECT; then
   exec "$REAL_PATH" "$@"
 fi
+
 
 # Mikey’s context‐collector functions 
 
