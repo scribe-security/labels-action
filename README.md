@@ -1,33 +1,41 @@
 # labels-action
 
-Wraps `docker build` and `docker buildx build` to automatically inject two labels on every build:
+Wraps `docker build` and `docker buildx build` to automatically inject two Docker labels on every build:
 
-- CONTEXT: JSON of pipeline & Git metadata (across CI platforms)
+* **CONTEXT**: JSON of pipeline & Git metadata (across CI platforms)
+* **CI run ID**: your CI’s run‐ID variable (e.g. `GITHUB_RUN_ID`, `CI_JOB_ID`)
 
-- your CI’s run‐ID (e.g. `GITHUB_RUN_ID`)
+Env vars containing `_TOKEN`, `_PASSWORD` or `_SECRET` are excluded.
 
-Env vars containing `_TOKEN`, `_PASSWORD` or` _SECRET` are excluded.
-
+---
 
 ## Installation
 
-### 1. Via Action
+### 1. Via Action (GitHub)
 
 ```yaml
 - name: Install labels shim
   uses: scribe-security/labels-action@main
 ```
 
-### 2. Via Curl
-```yaml
-- name: Install labels via curl
-  run: |
-    curl -sSfL https://scribe-security.github.io/labels-action/labels.sh | bash
+This uses GitHub’s `$GITHUB_PATH` to set up the shim automatically.
+
+### 2. Via Curl (Non-GitHub CI)
+
+```bash
+curl -sSfL https://scribe-security.github.io/labels-action/labels.sh -o install-labels.sh
+bash install-labels.sh
+# Activate the shim in your current shell:
+source "$HOME/labels-shim/env.sh"
 ```
+
+> **Note:** Sourcing `env.sh` is **required** in GitLab, Jenkins, Bitbucket, etc., so that your shell uses the shimmed `docker` binary.
+
+---
 
 ## Usage
 
-Immediately after installing the shim:
+After installation, any `docker build` or `docker buildx build` will include the injected labels. For example:
 
 ```yaml
 - name: Build & push image
@@ -37,20 +45,43 @@ Immediately after installing the shim:
     push: true
     tags: ghcr.io/${{ github.repository }}:${{ github.run_number }}
 ```
-Any manual --label flags are preserved alongside the injected ones.
+
+Manual `--label` flags are preserved alongside the injected ones.
+
+---
+
+## Supported Commands
+
+The shim injects labels for these forms of build commands:
+
+* `docker build`
+* `docker buildx build`
+* `docker buildx b`
+* `docker builder build`
+* `docker image build`
+
+---
 
 ## Troubleshooting
 
-### No labels
+### No labels appear?
 
-Check that which docker points under $HOME/labels-shim
+1. Verify that `docker` points to the shim:
 
-Confirm the shim log:
+   ```bash
+   which docker  # should return $HOME/labels-shim/docker
+   ```
+2. Check the install log for:
 
-```bash
-[labels-action] shim installed; docker build/buildx will now include labels
-```
-### Binary not found
-  
-Ensure you install the shim after any login steps so docker is on your $PATH.
+   ```bash
+   [labels-action] shim installed; docker & docker-buildx will now inject labels
+   ```
+3. On non-GitHub CI, ensure you ran:
 
+   ```bash
+   source "$HOME/labels-shim/env.sh"
+   ```
+
+### Docker not found?
+
+If a Docker login or setup step alters your `PATH`, install the shim **after** those steps so it remains first in `PATH`.
