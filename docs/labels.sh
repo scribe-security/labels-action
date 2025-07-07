@@ -29,6 +29,10 @@ if [[ -f "$SHIM_DIR/docker-buildx-original" ]]; then
 fi
 
 # 4) Prepend to PATH for the rest of the job
-echo "$SHIM_DIR" >> "$GITHUB_PATH"
+if [[ -n "${GITHUB_PATH:-}" ]]; then
+  echo "$SHIM_DIR" >> "$GITHUB_PATH"
+else
+  export PATH="$SHIM_DIR:$PATH"
+fi
 
 echo "[labels] shim installed; docker & docker-buildx will now inject labels on build"
