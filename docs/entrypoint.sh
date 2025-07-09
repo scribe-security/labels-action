@@ -28,12 +28,15 @@ elif [[ "$CMD" == "docker" ]]; then
   esac
 fi
 
+# Save original arguments for exec
+ORIGINAL_ARGS=("$@")
+
 # Log every command invocation
 echo "$CMD $*" >> "$LOG_FILE"
 
 # If not a build, just exec the real binary
 if ! $INJECT; then
-  exec "$REAL_PATH" "$@"
+  exec "$REAL_PATH" "${ORIGINAL_ARGS[@]}"
 fi
 
 # -------------------- Context Collection Functions --------------------
@@ -223,13 +226,14 @@ json="${json%,}}"
 
 # Preload the CI prefix var
 case "$platform" in
-  github)    prefix_var="GITHUB_RUN_ID";           prefix_val="${GITHUB_RUN_ID:-}" ;;  
-  gitlab)    prefix_var="CI_JOB_ID";                prefix_val="${CI_JOB_ID:-}"     ;;  
-  azure)     prefix_var="AZURE_RUN_ID";             prefix_val="${AZURE_RUN_ID:-}"  ;;  
-  circleci)  prefix_var="CIRCLE_WORKFLOW_ID";       prefix_val="${CIRCLE_WORKFLOW_ID:-}" ;;  
-  travis)    prefix_var="TRAVIS_JOB_ID";            prefix_val="${TRAVIS_JOB_ID:-}" ;;  
-  jenkins)   prefix_var="BUILD_ID";                 prefix_val="${BUILD_ID:-}"      ;;  
-  *)         prefix_var="";                         prefix_val=""                   ;;  
+  github)    prefix_var="GITHUB_RUN_ID";         prefix_val="${GITHUB_RUN_ID:-}" ;;  
+  gitlab)    prefix_var="CI_JOB_ID";              prefix_val="${CI_JOB_ID:-}" ;;  
+  bitbucket) prefix_var="BITBUCKET_PIPELINE_UUID"; prefix_val="${BITBUCKET_PIPELINE_UUID:-}" ;;  
+  azure)     prefix_var="AZURE_RUN_ID";           prefix_val="${AZURE_RUN_ID:-}" ;;  
+  circleci)  prefix_var="CIRCLE_WORKFLOW_ID";     prefix_val="${CIRCLE_WORKFLOW_ID:-}" ;;  
+  travis)    prefix_var="TRAVIS_JOB_ID";         prefix_val="${TRAVIS_JOB_ID:-}" ;;  
+  jenkins)   prefix_var="BUILD_ID";              prefix_val="${BUILD_ID:-}" ;;  
+  *)         prefix_var="";                       prefix_val="" ;;  
 esac
 
 LABEL_ARGS=(--label "CONTEXT=$json")
@@ -240,11 +244,11 @@ fi
 # -------------------- Baseimage Extraction --------------------
 # Default Dockerfile, override if -f provided
 DOCKERFILE="Dockerfile"
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    -f) shift; DOCKERFILE="$1"; break;;
-    *) shift;;
-  esac
+for ((i=0; i<${#ORIGINAL_ARGS[@]}; i++)); do
+  if [[ "${ORIGINAL_ARGS[i]}" == "-f" ]]; then
+    DOCKERFILE="${ORIGINAL_ARGS[i+1]}"
+    break
+  fi
 done
 
 if [[ -f "$DOCKERFILE" ]]; then
@@ -270,4 +274,4 @@ fi
 
 # Finally, inject labels and hand off to the real Docker binary
 echo "[labels-action] injecting labels: ${LABEL_ARGS[*]}" >&2
-exec "$REAL_PATH" "$@" "${LABEL_ARGS[@]}"
+exec "$REAL_PATH" "${ORIGINAL_ARGS[@]}" "${LABEL_ARGS[@]}"
