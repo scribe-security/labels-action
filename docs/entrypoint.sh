@@ -39,7 +39,7 @@ if ! $INJECT; then
   exec "$REAL_PATH" "${ORIGINAL_ARGS[@]}"
 fi
 
-# -------------------- Context Collection Functions --------------------
+# Context Collection Functions 
 
 autodetect_platform() {
   if   [[ -n "${GITHUB_RUN_ID:-}" ]]; then echo "github"
@@ -241,7 +241,7 @@ if [[ -n "$prefix_var" && -n "$prefix_val" ]]; then
   LABEL_ARGS+=(--label "$prefix_var=$prefix_val")
 fi
 
-# -------------------- Baseimage Extraction --------------------
+# Baseimage Extraction 
 # Default Dockerfile, override if -f provided
 DOCKERFILE="Dockerfile"
 for ((i=0; i<${#ORIGINAL_ARGS[@]}; i++)); do
@@ -261,7 +261,7 @@ if [[ -f "$DOCKERFILE" ]]; then
   LABEL_ARGS+=(--label "Baseimage=$BASE_JSON")
 fi
 
-# -------------------- DockerCommands Label --------------------
+# DockerCommands Label
 if [[ -f "$LOG_FILE" ]]; then
   CMDS_JSON="["
   while IFS= read -r line; do
