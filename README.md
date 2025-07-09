@@ -1,9 +1,11 @@
 # labels-action
 
-Wraps `docker build` and `docker buildx build` to automatically inject two Docker labels on every build:
+Wraps `docker build` and `docker buildx build` to automatically inject four Docker labels on every build:
 
 * **CONTEXT**: JSON of pipeline & Git metadata (across CI platforms)
 * **CI run ID**: your CI’s run‐ID variable (e.g. `GITHUB_RUN_ID`, `CI_JOB_ID`)
+* **Baseimage**: JSON object containing the Dockerfile name, the last `FROM` line, and the base image string
+* **DockerCommands**: JSON array listing every `docker` invocation (`build`, `push`, etc.) during the job
 
 Env vars containing `_TOKEN`, `_PASSWORD` or `_SECRET` are excluded.
 
