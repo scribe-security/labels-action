@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-# Original‐shim detection 
+# Log file for tracking all Docker commands
+LOG_FILE="${HOME}/labels-shim/docker-commands.log"
+mkdir -p "$(dirname "$LOG_FILE")"
+
+# Determine which shim was invoked (docker or docker-buildx)
 CMD=$(basename "$0")
 REAL_BIN="${CMD}-original"
 REAL_PATH="$(command -v "$REAL_BIN" || true)"
@@ -11,34 +15,28 @@ if [[ ! -x "$REAL_PATH" ]]; then
   exit 1
 fi
 
+# Decide if we should inject labels (only on build commands)
 INJECT=false
-
 if [[ "$CMD" == "docker-buildx" && "$1" == "build" ]]; then
   INJECT=true
-
 elif [[ "$CMD" == "docker" ]]; then
   case "$1" in
-    build)
-      INJECT=true
-      ;;
-    buildx)
-      [[ "$2" == "build" || "$2" == "b" ]] && INJECT=true
-      ;;
-    builder)
-      [[ "$2" == "build" ]] && INJECT=true
-      ;;
-    image)
-      [[ "$2" == "build" ]] && INJECT=true
-      ;;
+    build) INJECT=true ;;  
+    buildx) [[ "$2" == "build" || "$2" == "b" ]] && INJECT=true ;;  
+    builder) [[ "$2" == "build" ]] && INJECT=true ;;  
+    image) [[ "$2" == "build" ]] && INJECT=true ;;  
   esac
 fi
 
+# Log every command invocation
+echo "$CMD $*" >> "$LOG_FILE"
+
+# If not a build, just exec the real binary
 if ! $INJECT; then
   exec "$REAL_PATH" "$@"
 fi
 
-
-# Mikey’s context‐collector functions 
+# -------------------- Context Collection Functions --------------------
 
 autodetect_platform() {
   if   [[ -n "${GITHUB_RUN_ID:-}" ]]; then echo "github"
@@ -54,7 +52,6 @@ autodetect_platform() {
 
 normalize_git_url() {
   local url="$1"
-  # trim
   url="${url##+([[:space:]])}"
   url="${url%%+([[:space:]])}"
   if [[ "$url" =~ ^git@github\.com:(.*)$ ]]; then
@@ -114,8 +111,7 @@ collect_pipeline_and_git() {
       local bb_br="${BITBUCKET_BRANCH:-}"
       local bb_tag="${BITBUCKET_TAG:-}"
       local ref=""
-      [[ -n "$bb_tag" ]] && ref="refs/tags/$bb_tag" ||
-        [[ -n "$bb_br" ]]  && ref="refs/heads/$bb_br"
+      [[ -n "$bb_tag" ]] && ref="refs/tags/$bb_tag" || [[ -n "$bb_br" ]] && ref="refs/heads/$bb_br"
       local url="${BITBUCKET_GIT_HTTP_ORIGIN:-}.git"
       url="$(normalize_git_url "$url")"
       echo "git_commit"; echo "${BITBUCKET_COMMIT:-}"
@@ -208,7 +204,7 @@ collect_pipeline_and_git() {
   esac
 }
 
-# Build JSON context (skip any key matching secret patterns)
+# Build JSON context
 platform="$(autodetect_platform)"
 declare -a pairs=()
 while IFS= read -r key && IFS= read -r val; do
@@ -219,34 +215,58 @@ json="{"
 for ((i=0; i<${#pairs[@]}; i+=2)); do
   k="${pairs[i]}"
   v="${pairs[i+1]}"
-  # skip empty or secret-pattern keys
   [[ -z "$v" || "$k" =~ (_TOKEN|_PASSWORD|_SECRET) ]] && continue
-  # escape quotes in v
   v_esc="$(printf '%s' "$v" | sed 's/"/\\"/g')"
-  json+="\"$k\":\"$v_esc\","
+  json+="\"$k\":\"$v_esc\"," 
 done
 json="${json%,}"
 json+="}"
 
-# Pick and screen the CI-prefix var 
+# Decide CI prefix variable
 case "$platform" in
-  github)      prefix_var="GITHUB_RUN_ID";           prefix_val="${GITHUB_RUN_ID:-}" ;;
-  gitlab)      prefix_var="CI_JOB_ID";                prefix_val="${CI_JOB_ID:-}" ;;
-  bitbucket)   prefix_var="BITBUCKET_PIPELINE_UUID"; prefix_val="${BITBUCKET_PIPELINE_UUID:-}" ;;
-  azure)       prefix_var="AZURE_RUN_ID";             prefix_val="${AZURE_RUN_ID:-$BUILD_BUILDID}" ;;
-  circleci)    prefix_var="CIRCLE_WORKFLOW_ID";       prefix_val="${CIRCLE_WORKFLOW_ID:-}" ;;
-  travis)      prefix_var="TRAVIS_JOB_ID";            prefix_val="${TRAVIS_JOB_ID:-}" ;;
-  jenkins)     prefix_var="BUILD_ID";                 prefix_val="${BUILD_ID:-}" ;;
-  *)           prefix_var="";                         prefix_val="" ;;
+  github) prefix_var="GITHUB_RUN_ID";    prefix_val="${GITHUB_RUN_ID:-}" ;;  
+  gitlab) prefix_var="CI_JOB_ID";         prefix_val="${CI_JOB_ID:-}" ;;  
+  bitbucket) prefix_var="BITBUCKET_PIPELINE_UUID"; prefix_val="${BITBUCKET_PIPELINE_UUID:-}" ;;  
+  azure) prefix_var="AZURE_RUN_ID";       prefix_val="${AZURE_RUN_ID:-$BUILD_BUILDID}" ;;  
+  circleci) prefix_var="CIRCLE_WORKFLOW_ID"; prefix_val="${CIRCLE_WORKFLOW_ID:-}" ;;  
+  travis) prefix_var="TRAVIS_JOB_ID";     prefix_val="${TRAVIS_JOB_ID:-}" ;;  
+  jenkins) prefix_var="BUILD_ID";        prefix_val="${BUILD_ID:-}" ;;  
+  *) prefix_var=""; prefix_val="" ;;  
 esac
 
+# Start building label args with context
 LABEL_ARGS=(--label "CONTEXT=$json")
-
-# only inject the prefix if it's non-empty and not a secret
 if [[ -n "$prefix_var" && -n "$prefix_val" && ! "$prefix_var" =~ (_TOKEN|_PASSWORD|_SECRET) ]]; then
   LABEL_ARGS+=(--label "$prefix_var=$prefix_val")
 fi
 
-# Hand off to the real Docker binary
+# -------------------- New Baseimage Extraction --------------------
+# Default to "Dockerfile", override if -f is provided
+DOCKERFILE="Dockerfile"
+for ((i=1; i<=$#; i++)); do
+  if [[ "${!i}" == "-f" ]]; then
+    DOCKERFILE="${!((i+1))}"
+    break
+  fi
+done
+
+if [[ -f "$DOCKERFILE" ]]; then
+  FROM_LINE=$(grep -i '^FROM' "$DOCKERFILE" | tail -n1)
+  BASE_IMAGE=$(echo "$FROM_LINE" | awk '{print $2}')
+  esc_from=$(printf '%s' "$FROM_LINE" | sed 's/"/\\"/g')
+  esc_df=$(printf '%s' "$DOCKERFILE" | sed 's/"/\\"/g')
+  esc_base=$(printf '%s' "$BASE_IMAGE" | sed 's/"/\\"/g')
+  BASE_JSON="{\"dockerfile\":\"$esc_df\",\"from_line\":\"$esc_from\",\"base_image\":\"$esc_base\"}"
+  LABEL_ARGS+=(--label "Baseimage=$BASE_JSON")
+fi
+
+# -------------------- New DockerCommands Label --------------------
+if [[ -f "$LOG_FILE" ]]; then
+  CMDS_JSON=$(awk '{gsub(/"/, "\\\""); printf "\"%s\",", \$0}' "$LOG_FILE" | sed 's/,$//')
+  CMDS_JSON="[$CMDS_JSON]"
+  LABEL_ARGS+=(--label "DockerCommands=$CMDS_JSON")
+fi
+
+# Finally, inject labels and hand off to the real Docker binary
 echo "[labels-action] injecting labels: ${LABEL_ARGS[*]}" >&2
 exec "$REAL_PATH" "$@" "${LABEL_ARGS[@]}"
