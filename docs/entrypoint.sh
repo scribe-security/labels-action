@@ -21,10 +21,10 @@ if [[ "$CMD" == "docker-buildx" && "$1" == "build" ]]; then
   INJECT=true
 elif [[ "$CMD" == "docker" ]]; then
   case "$1" in
-    build) INJECT=true ;;  
-    buildx) [[ "$2" == "build" || "$2" == "b" ]] && INJECT=true ;;  
-    builder) [[ "$2" == "build" ]] && INJECT=true ;;  
-    image) [[ "$2" == "build" ]] && INJECT=true ;;  
+    build)      INJECT=true ;;
+    buildx)     [[ "$2" == "build" || "$2" == "b" ]] && INJECT=true ;;
+    builder)    [[ "$2" == "build" ]] && INJECT=true ;;
+    image)      [[ "$2" == "build" ]] && INJECT=true ;;
   esac
 fi
 
@@ -216,32 +216,28 @@ for ((i=0; i<${#pairs[@]}; i+=2)); do
   k="${pairs[i]}"
   v="${pairs[i+1]}"
   [[ -z "$v" || "$k" =~ (_TOKEN|_PASSWORD|_SECRET) ]] && continue
-  v_esc="$(printf '%s' "$v" | sed 's/"/\\"/g')"
-  json+="\"$k\":\"$v_esc\"," 
+  v_esc=$(printf '%s' "$v" | sed 's/"/\\"/g')
+  json+="\"$k\":\"$v_esc\","
 done
-json="${json%,}"
-json+="}"
+json="${json%,}}"
 
-# Decide CI prefix variable
+# Preload the CI prefix var
 case "$platform" in
-  github) prefix_var="GITHUB_RUN_ID";    prefix_val="${GITHUB_RUN_ID:-}" ;;  
-  gitlab) prefix_var="CI_JOB_ID";         prefix_val="${CI_JOB_ID:-}" ;;  
-  bitbucket) prefix_var="BITBUCKET_PIPELINE_UUID"; prefix_val="${BITBUCKET_PIPELINE_UUID:-}" ;;  
-  azure) prefix_var="AZURE_RUN_ID";       prefix_val="${AZURE_RUN_ID:-$BUILD_BUILDID}" ;;  
-  circleci) prefix_var="CIRCLE_WORKFLOW_ID"; prefix_val="${CIRCLE_WORKFLOW_ID:-}" ;;  
-  travis) prefix_var="TRAVIS_JOB_ID";     prefix_val="${TRAVIS_JOB_ID:-}" ;;  
-  jenkins) prefix_var="BUILD_ID";        prefix_val="${BUILD_ID:-}" ;;  
-  *) prefix_var=""; prefix_val="" ;;  
+  github)    prefix_var="GITHUB_RUN_ID";           prefix_val="${GITHUB_RUN_ID:-}" ;;
+  gitlab)    prefix_var="CI_JOB_ID";                prefix_val="${CI_JOB_ID:-}"     ;;
+  azure)     prefix_var="AZURE_RUN_ID";             prefix_val="${AZURE_RUN_ID:-}"  ;;
+  circleci)  prefix_var="CIRCLE_WORKFLOW_ID";       prefix_val="${CIRCLE_WORKFLOW_ID:-}" ;;
+  travis)    prefix_var="TRAVIS_JOB_ID";            prefix_val="${TRAVIS_JOB_ID:-}" ;;
+  jenkins)   prefix_var="BUILD_ID";                 prefix_val="${BUILD_ID:-}"      ;;
+  *)         prefix_var="";                         prefix_val=""                   ;;
 esac
 
-# Start building label args with context
 LABEL_ARGS=(--label "CONTEXT=$json")
-if [[ -n "$prefix_var" && -n "$prefix_val" && ! "$prefix_var" =~ (_TOKEN|_PASSWORD|_SECRET) ]]; then
+if [[ -n "$prefix_var" && -n "$prefix_val" ]]; then
   LABEL_ARGS+=(--label "$prefix_var=$prefix_val")
 fi
 
-# -------------------- New Baseimage Extraction --------------------
-# Default to "Dockerfile", override if -f is provided
+# -------------------- Baseimage Extraction --------------------
 DOCKERFILE="Dockerfile"
 for ((i=1; i<=$#; i++)); do
   if [[ "${!i}" == "-f" ]]; then
@@ -260,10 +256,16 @@ if [[ -f "$DOCKERFILE" ]]; then
   LABEL_ARGS+=(--label "Baseimage=$BASE_JSON")
 fi
 
-# -------------------- New DockerCommands Label --------------------
+# -------------------- DockerCommands Label (fixed) --------------------
 if [[ -f "$LOG_FILE" ]]; then
-  CMDS_JSON=$(awk '{gsub(/"/, "\\\""); printf "\"%s\",", \$0}' "$LOG_FILE" | sed 's/,$//')
-  CMDS_JSON="[$CMDS_JSON]"
+  CMDS_JSON="["
+  while IFS= read -r line; do
+    # escape any double-quotes
+    esc=${line//\"/\\\"}
+    CMDS_JSON+="\"$esc\","
+  done < "$LOG_FILE"
+  # close array, trim trailing comma
+  CMDS_JSON="${CMDS_JSON%,}]"
   LABEL_ARGS+=(--label "DockerCommands=$CMDS_JSON")
 fi
 
