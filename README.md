@@ -9,6 +9,8 @@ Wraps `docker build` and `docker buildx build` to automatically inject four Dock
 
 Env vars containing `_TOKEN`, `_PASSWORD` or `_SECRET` are excluded.
 
+A repo with demos of using this action can be found here: https://github.com/scribe-security/cli-wrapper
+
 ---
 
 ## Installation
